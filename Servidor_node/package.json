@@ -1,0 +1,12 @@
+{
+  "name": "servidor_node",
+  "version": "1.0.0",
+  "description": "API REST para consulta de filas do SAC",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
