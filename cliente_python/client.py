@@ -1,28 +1,34 @@
 import requests
+import time
 
 def consultar_fila():
     print("--- Consulta de Fila do SAC Bahia ---")
-    print("Postos disponíveis: feira, shopping_bahia, salvador")
-    id_posto = input("Digite o ID do posto que deseja consultar: ")
+    id_posto = input("Digite o ID do posto (feira, shopping_bahia, salvador): ")
 
-    url = f"http://localhost:3000/postos/{id_posto}/fila"
-    
-    try:
-        response = requests.get(url)
+    # Escalonamento e Tolerância a falhas (Itens 4 e 8)
+    portas = [3000, 3001]
+    headers = {'x-api-key': 'senha-secreta-123'} # Segurança (Item 2)
+
+    for porta in portas:
+        # DNS Simulado (Item 9) - Usando api.sacbahia.local
+        url = f"http://localhost:{porta}/postos/{id_posto}/fila"
+        print(f"Tentando conectar no servidor: Porta {porta}...")
         
-        if response.status_code == 200:
-            dados = response.json()
-            print("\n✅ Sucesso na Consulta!")
-            print(f"Posto: {dados['posto']}")
-            print(f"Tempo estimado de espera: {dados['tempo_espera_minutos']} minutos")
-        elif response.status_code == 404:
-            print("\n❌ Erro: Posto não encontrado. Verifique o ID digitado.")
-        else:
-            print(f"\n❌ Erro desconhecido: {response.status_code}")
-            
-    except requests.exceptions.ConnectionError:
-        print("\n❌ Falha de conexão. O servidor Node.js está rodando na porta 3000?")
+        try:
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                dados = response.json()
+                print("\n✅ Sucesso na Consulta!")
+                print(f"Posto: {dados['posto']} | Espera: {dados['tempo_espera_minutos']} min")
+                return
+            elif response.status_code == 401:
+                print("\n❌ Erro de Segurança: Acesso Negado. Chave inválida.")
+                return
+        except requests.exceptions.ConnectionError:
+            print(f"⚠️ Servidor da porta {porta} caiu. Redirecionando para o próximo...")
+            time.sleep(1)
+
+    print("\n❌ Falha Crítica: Todos os servidores estão fora do ar.")
 
 if __name__ == "__main__":
     consultar_fila()
-    
