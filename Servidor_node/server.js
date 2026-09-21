@@ -1,6 +1,5 @@
 const express = require('express');
 const app = express();
-// Recebe a porta pelo terminal ou usa 3000 por padrão
 const port = process.argv[2] || 3000;
 
 const bancoDeDadosSAC = {
@@ -9,7 +8,6 @@ const bancoDeDadosSAC = {
     'salvador': { posto: 'SAC Salvador', tempo_espera_minutos: 30 }
 };
 
-// Segurança (Item 2) - Exige API Key
 app.use((req, res, next) => {
     const apiKey = req.headers['x-api-key'];
     if (apiKey === '32452555') {
