@@ -1,34 +1,47 @@
 import requests
 import time
+import sys
 
-def consultar_fila():
-    print("--- Consulta de Fila do SAC Bahia ---")
-    id_posto = input("Digite o ID do posto (feira, shopping_bahia, salvador): ")
+def iniciar_cliente():
+    print("--- Sistema de Consulta SAC Bahia ---")
+    posto = input("Informe o ID do posto (ex: feira, salvador): ").strip().lower()
+    
+    if not posto:
+        print("Erro: ID do posto não informado.")
+        sys.exit(1)
 
-    # Escalonamento e Tolerância a falhas (Itens 4 e 8)
     portas = [3000, 3001]
-    headers = {'x-api-key': 'senha-secreta-123'} # Segurança (Item 2)
+    headers = {'x-api-key': 'unifan-tde-api'}
+    
+    print("\nIniciando requisição...")
 
     for porta in portas:
-        # DNS Simulado (Item 9) - Usando api.sacbahia.local
-        url = f"http://localhost:{porta}/postos/{id_posto}/fila"
-        print(f"Tentando conectar no servidor: Porta {porta}...")
+        url = f"http://api.sacbahia.local:{porta}/postos/{posto}/fila"
         
         try:
             response = requests.get(url, headers=headers)
+            
             if response.status_code == 200:
                 dados = response.json()
-                print("\n✅ Sucesso na Consulta!")
-                print(f"Posto: {dados['posto']} | Espera: {dados['tempo_espera_minutos']} min")
+                print(f"Status 200 OK (Rota {porta})")
+                print(f"Posto: {dados['posto']}")
+                print(f"Espera estimada: {dados['tempo_espera_minutos']} minutos")
+                return
+            elif response.status_code == 404:
+                print("Erro 404: Posto não encontrado no registro.")
                 return
             elif response.status_code == 401:
-                print("\n❌ Erro de Segurança: Acesso Negado. Chave inválida.")
+                print("Erro 401: Acesso negado. Verifique a credencial.")
                 return
+            else:
+                print(f"Erro {response.status_code}: Falha na comunicação.")
+                return
+                
         except requests.exceptions.ConnectionError:
-            print(f"⚠️ Servidor da porta {porta} caiu. Redirecionando para o próximo...")
+            print(f"Falha de conexão na porta {porta}. Acionando failover...")
             time.sleep(1)
 
-    print("\n❌ Falha Crítica: Todos os servidores estão fora do ar.")
+    print("\nErro Crítico: Todos os nós do servidor estão inoperantes.")
 
 if __name__ == "__main__":
-    consultar_fila()
+    iniciar_cliente()
