@@ -1,0 +1,41 @@
+{
+  "info": {
+    "name": "TDE SAC Bahia - Fase 4",
+    "description": "Consulta de recomendação para o ensaio de carga em homologação.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "sac_base_url",
+      "value": "http://127.0.0.1:18080"
+    }
+  ],
+  "item": [
+    {
+      "name": "Recomendar posto",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-API-Key",
+            "value": "{{sac_api_key}}"
+          }
+        ],
+        "url": "{{sac_base_url}}/recomendacoes",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"latitude\":-12.979,\"longitude\":-38.452}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

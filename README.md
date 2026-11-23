@@ -122,6 +122,18 @@ O script usa registros de teste com protocolos exclusivos e verifica os três de
 
 O JSON registra p50 e p95 das requisições bem-sucedidas e a taxa de falha, que inclui respostas 5xx e tentativas sem resposta. Use `--saida=output/bancada-local.json` para atualizar as evidências. Para arguição, demonstre a recomendação e explique por que ela muda com a origem, mostre a detecção pelo balanceador e explique como o banco conserva uma única chegada. O [relatório da Parte 2](output/pdf/Relatorio_TDE_Parte_2.pdf) apresenta o diagnóstico e o cenário regional.
 
+### Fase 4 sob carga contínua
+
+Com o Compose em execução e as duas réplicas saudáveis, rode `node scripts/fase4.mjs`. O ensaio mantém **100 usuários virtuais por três minutos** consultando `POST /recomendacoes`, com até uma requisição por segundo por usuário. Ele interrompe a réplica B ao fim do primeiro minuto e a reinicia ao fim do segundo, mantendo as consultas durante as duas mudanças. O [resultado da Fase 4 local](output/fase4-local.json) registra p50, p95, contagem e taxa de falhas por janela e os horários em que o balanceador retirou e reintegrou a réplica.
+
+### Roteiro de arguição
+
+1. **Luiz** abre o cliente Python e compara as recomendações para Salvador e Feira de Santana. Mostra o endereço único e explica o DNS do Docker e o equivalente no Route 53.
+2. **Diego** apresenta o contrato OpenAPI, o ranking de viagem mais espera e a chave de idempotência. Na rajada de chegadas, aponta o HTTP 201 da primeira inserção e prova que as demais respostas reutilizam o mesmo registro no PostgreSQL.
+3. **Thiago** mostra o fluxograma de tolerância a falhas, interrompe uma réplica pela bancada e acompanha a recuperação pelo mesmo endereço. Mostra o HTTP 404 com o mesmo `Correlation ID` no balanceador e na API e explica a separação entre o ensaio local e a arquitetura AWS.
+
+Para uma demonstração curta, execute `node scripts/bancada.mjs --compose` durante a apresentação e abra os resultados do ensaio de três minutos para discutir a janela de detecção. Cada integrante deve conseguir responder sobre o caminho da requisição, o efeito da queda de uma réplica e a consistência do check-in.
+
 ## AWS com Terraform e GitOps
 
 A configuração em [infra/aws](infra/aws) descreve o equivalente na AWS. O ALB HTTPS recebe tráfego via Route 53 e só as EC2 das sub-redes privadas alcançam o RDS. O Target Group verifica `/health`; o Auto Scaling Group registra os alvos, mantém no mínimo duas EC2 e escala de acordo com requisições por alvo. O RDS é privado e Multi-AZ por padrão. A aplicação lê um segredo específico durante a inicialização e conecta ao banco com TLS e usuário de privilégios limitados.
@@ -158,5 +170,14 @@ terraform -chdir=infra/aws validate
 Na primeira implantação, configure as variáveis de [versions.tf](infra/aws/versions.tf), publique a imagem no ECR e selecione sua tag. Inicialize o backend com `terraform init -backend-config="bucket=BUCKET" -backend-config="key=sac/terraform.tfstate" -backend-config="region=REGIAO"` em `infra/aws`. Revise o plano antes de aplicar. A infraestrutura inclui recursos tarifados, como ALB, RDS e NAT gateways.
 
 Inicialize o banco uma vez antes do teste funcional. Obtenha `rds_host` e `rds_admin_secret_arn` das saídas Terraform e use uma EC2 gerenciada pelo Systems Manager para encaminhar uma porta local até o RDS com `AWS-StartPortForwardingSessionToRemoteHost`. Conecte com `psql` como `sac_admin` via `host` igual ao endpoint, `hostaddr=127.0.0.1`, porta do túnel, banco `sac` e `sslmode=verify-full` com a CA do RDS. Aplique `infra/db/01-schema.sql` e `infra/db/02-permissoes.sql` e use `\password sac_app` para definir a senha do segredo de aplicação. Valide `/ready` pelo ALB com a chave configurada. Alterações de segredo exigem atualizar o usuário do banco quando aplicável e reiniciar as réplicas de forma progressiva.
+
+### Reproduzir a Fase 4 na AWS
+
+1. Confirme a resposta de `/ready` pelo endereço HTTPS e dois alvos saudáveis no Target Group de homologação. Registre a zona e o ID de cada EC2.
+2. Importe a [coleção da Fase 4](scripts/fase4.postman_collection.json), defina `sac_base_url` como o endereço HTTPS desse ambiente e guarde `sac_api_key` como variável privada. No Performance Runner, selecione o perfil fixo com **100 usuários virtuais e três minutos**. [Documentação do Postman](https://learning.postman.com/docs/tests-and-scripts/performance-testing/performance-test-configuration)
+3. Ao fim do primeiro minuto, pare uma EC2 do grupo de homologação e registre o horário UTC. Mantenha a carga e observe a transição do alvo, o tráfego pela EC2 sobrevivente e a reposição de capacidade pelo ASG.
+4. Exporte os resultados do cliente e os gráficos de `HealthyHostCount`, `UnHealthyHostCount`, `TargetResponseTime`, `HTTPCode_ELB_5XX_Count` e `HTTPCode_Target_5XX_Count`. Compare as janelas antes, durante e depois da falha. Registre separadamente os prazos excedidos do cliente.
+
+O ensaio publicado foi executado no Docker Compose. O [Plano de Aula 3](https://docs.google.com/document/d/15Zqx8tGXSW5WOyYnxo0caoXPR54jIqq1eH2g1drf0zc/edit) descreve a Fase 4 com o ALB real.
 
 No GitHub, configure as variáveis de repositório `TF_AWS_ROLE_ARN`, `TF_BUCKET`, `AWS_REGION`, `SAC_HOSTNAME`, `SAC_ZONE_ID`, `SAC_CERTIFICATE_ARN`, `SAC_INGRESS_CIDR`, `SAC_AMI_ID`, `SAC_ECR_REPOSITORY_URL` e `SAC_APP_SECRET_ARN`. A CI executa a bancada e valida o Terraform. O workflow AWS planeja a partir do Git, publica a imagem identificada pelo hash do código e aplica sob acionamento explícito. A execução agendada sinaliza diferenças no plano. Revise divergências antes da reconciliação.

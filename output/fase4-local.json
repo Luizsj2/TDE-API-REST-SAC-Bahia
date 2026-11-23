@@ -1,0 +1,112 @@
+{
+  "ambiente": "Docker Compose local / PostgreSQL",
+  "inicio_utc": "2026-11-23T23:25:21.980Z",
+  "usuarios_virtuais": 100,
+  "duracao_s": 180,
+  "intervalo_por_usuario_ms": 1000,
+  "rota": "POST /recomendacoes",
+  "antes_da_parada": {
+    "requisicoes": 5970,
+    "p50_ms": 6.08,
+    "p95_ms": 8.42,
+    "falhas": 0,
+    "taxa_falhas_pct": 0,
+    "codigos": {
+      "200": 5970
+    },
+    "nos": {
+      "api-b": 2985,
+      "api-a": 2985
+    }
+  },
+  "janela_de_deteccao": {
+    "requisicoes": 123,
+    "p50_ms": 6.46,
+    "p95_ms": 10.98,
+    "falhas": 50,
+    "taxa_falhas_pct": 40.65,
+    "codigos": {
+      "200": 73,
+      "503": 50
+    },
+    "nos": {
+      "api-a": 61,
+      "api-b": 12
+    }
+  },
+  "com_uma_replica": {
+    "requisicoes": 5770,
+    "p50_ms": 6.3,
+    "p95_ms": 11.74,
+    "falhas": 0,
+    "taxa_falhas_pct": 0,
+    "codigos": {
+      "200": 5770
+    },
+    "nos": {
+      "api-a": 5770
+    }
+  },
+  "janela_de_reintegracao": {
+    "requisicoes": 238,
+    "p50_ms": 6.73,
+    "p95_ms": 12.61,
+    "falhas": 0,
+    "taxa_falhas_pct": 0,
+    "codigos": {
+      "200": 238
+    },
+    "nos": {
+      "api-a": 238
+    }
+  },
+  "depois_da_reintegracao": {
+    "requisicoes": 5714,
+    "p50_ms": 6.37,
+    "p95_ms": 10.99,
+    "falhas": 0,
+    "taxa_falhas_pct": 0,
+    "codigos": {
+      "200": 5714
+    },
+    "nos": {
+      "api-a": 2857,
+      "api-b": 2857
+    }
+  },
+  "total": {
+    "requisicoes": 17815,
+    "p50_ms": 6.22,
+    "p95_ms": 10.71,
+    "falhas": 50,
+    "taxa_falhas_pct": 0.28,
+    "codigos": {
+      "200": 17765,
+      "503": 50
+    },
+    "nos": {
+      "api-b": 5854,
+      "api-a": 11911
+    }
+  },
+  "tempo_deteccao_ms": 1244,
+  "tempo_reintegracao_ms": 2564,
+  "eventos_balanceador": [
+    {
+      "timestamp": "2026-11-23T23:26:23.233Z",
+      "nivel": "warn",
+      "evento": "saude_alvo",
+      "no": "balanceador",
+      "alvo": "api-b:3000",
+      "saudavel": false
+    },
+    {
+      "timestamp": "2026-11-23T23:27:24.555Z",
+      "nivel": "info",
+      "evento": "saude_alvo",
+      "no": "balanceador",
+      "alvo": "api-b:3000",
+      "saudavel": true
+    }
+  ]
+}
