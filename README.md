@@ -27,13 +27,69 @@ python cliente_python/client_gui.py
 
 No Windows, use `py -3` se o comando `python` não estiver disponível. O script preserva as chaves que já existirem em `.secrets/`. O cliente lê a chave por arquivo e usa `http://127.0.0.1:18080` por padrão. Use `SAC_API_URL` se mudar a porta ou o ambiente. `API_KEY_FILE` e `API_KEY` permitem usar outra chave. A porta é publicada apenas no loopback. O balanceador alcança as duas réplicas por DNS do Docker e o banco só aparece na rede interna.
 
-```text
-Cliente Python → balanceador :18080
-                     ├─ api-a :3000 ─┐
-                     └─ api-b :3000 ─┴─ PostgreSQL :5432
+`docker compose down` encerra a bancada e preserva o volume do PostgreSQL. Para desenvolvimento da API com dados em memória, use `npm ci` em `Servidor_node/` e inicie `node server.js` com uma chave de teste em `API_KEY`. Esse modo serve para exercitar as rotas em um único processo. O armazenamento compartilhado e a idempotência entre réplicas são avaliados no Compose.
+
+## Fluxograma da bancada
+
+### Entrada e tolerância a falhas
+
+```mermaid
+flowchart TD
+    Cliente([Cliente Python ou Tkinter]) --> Entrada["Requisição HTTP ao balanceador na porta 18080"]
+    Entrada --> Correlacao["Preserva ou gera o Correlation ID"]
+    Correlacao --> Alvos{"Há réplicas saudáveis?"}
+    Sondas["Sondas GET /health nas duas réplicas"] -.-> Estado["Atualiza a lista de alvos a cada verificação"]
+    Estado -.-> Alvos
+    Alvos -->|Nenhuma| Falha["HTTP 503"]
+    Alvos -->|Uma| Remanescente["Usa a réplica saudável"]
+    Alvos -->|Duas| Rodizio["Distribui por rodízio"]
+    Remanescente --> API["API Node.js na réplica A ou B"]
+    Rodizio --> API
+    API --> Saude{"É GET /health?"}
+    Saude -->|Sim| Saudavel["HTTP 200: processo ativo"]
+    Saude -->|Não| Chave{"X-API-Key válida?"}
+    Chave -->|Não| Negado["HTTP 401"]
+    Chave -->|Sim| Operacao([Processa a operação])
 ```
 
-`docker compose down` encerra a bancada e preserva o volume do PostgreSQL. Para desenvolvimento da API com dados em memória, use `npm ci` em `Servidor_node/` e inicie `node server.js` com uma chave de teste em `API_KEY`. Esse modo serve para exercitar as rotas em um único processo. O armazenamento compartilhado e a idempotência entre réplicas são avaliados no Compose.
+Durante a detecção de uma queda, uma requisição encaminhada ao alvo indisponível pode receber HTTP 503. Depois que o balanceador retira esse alvo da rotação, o cliente continua usando o mesmo endereço. A réplica volta ao rodízio quando passa na sonda.
+
+### Consulta de fila e recomendação de posto
+
+```mermaid
+flowchart TD
+    Operacao([Requisição autenticada]) --> Tipo{"Qual é a consulta?"}
+    Tipo -->|Consultar fila| Fila["Busca o posto no PostgreSQL"]
+    Tipo -->|Recomendar posto| Origem{"Origem válida<br/>na área atendida?"}
+    Origem -->|Não| Invalida["HTTP 400 ou 422"]
+    Origem -->|Sim| Catalogo["Lê os postos no PostgreSQL"]
+    Fila -->|Encontrado| Espera["HTTP 200: tempo de espera"]
+    Fila -->|Inexistente| Inexistente["HTTP 404"]
+    Catalogo --> Dijkstra["Dijkstra: menor tempo de viagem"]
+    Dijkstra --> Ranking["Ordena por viagem mais espera"]
+    Ranking --> GeoJSON["HTTP 200: posto, alternativas e rota GeoJSON"]
+```
+
+### Registro de chegada
+
+```mermaid
+flowchart TD
+    Chegada([Requisição de chegada autenticada]) --> Entrada{"Coordenadas e Idempotency-Key válidas?"}
+    Entrada -->|Não| Invalida["HTTP 400"]
+    Entrada -->|Sim| Posto{"Posto existe?"}
+    Posto -->|Não| Ausente["HTTP 404"]
+    Posto -->|Sim| Raio{"A distância é de até 250 m?"}
+    Raio -->|Não| Distante["HTTP 422"]
+    Raio -->|Sim| Gravar["Tenta inserir pela chave posto e protocolo"]
+    DB[("PostgreSQL compartilhado")]
+    Posto -.-> DB
+    Gravar -.-> DB
+    Gravar --> Nova{"Criou registro?"}
+    Nova -->|Sim| Criado["HTTP 201: chegada criada"]
+    Nova -->|Não| Repetido["HTTP 200: devolve a chegada existente"]
+```
+
+A rota autenticada `GET /ready` testa o acesso ao catálogo e retorna HTTP 200 se estiver acessível. A API também retorna HTTP 404 para uma rota desconhecida, HTTP 413 para um corpo JSON acima do limite e HTTP 503 se o banco estiver indisponível. O balanceador e a API registram o mesmo `Correlation ID` nos logs das requisições de negócio.
 
 ## Contrato e cálculo de rota
 
@@ -69,6 +125,22 @@ O JSON registra p50 e p95 das requisições bem-sucedidas e a taxa de falha, que
 ## AWS com Terraform e GitOps
 
 A configuração em [infra/aws](infra/aws) descreve o equivalente na AWS. O ALB HTTPS recebe tráfego via Route 53 e só as EC2 das sub-redes privadas alcançam o RDS. O Target Group verifica `/health`; o Auto Scaling Group registra os alvos, mantém no mínimo duas EC2 e escala de acordo com requisições por alvo. O RDS é privado e Multi-AZ por padrão. A aplicação lê um segredo específico durante a inicialização e conecta ao banco com TLS e usuário de privilégios limitados.
+
+```mermaid
+flowchart TD
+    Cliente([Cliente]) --> DNS["Route 53 resolve o nome da API"]
+    DNS --> ALB["ALB público com HTTPS"]
+    ALB --> TG["Target Group com sondas GET /health"]
+    TG --> EC2["API nas EC2 privadas em duas zonas"]
+    ASG["Auto Scaling Group<br/>Mantém de duas a quatro EC2"] -.->|Registra e substitui instâncias| EC2
+    TG -.->|Informa saúde dos alvos| ASG
+    Secrets["Secrets Manager"] -.->|Credenciais na inicialização| EC2
+    EC2 -->|PostgreSQL com TLS| RDS[("RDS PostgreSQL privado e Multi-AZ")]
+    EC2 -.-> Logs["CloudWatch: logs da API"]
+    ALB -.-> Acesso["S3: logs de acesso do ALB"]
+    ALB -.-> Metricas["CloudWatch: métricas e alarmes"]
+    RDS -.-> Metricas
+```
 
 ### Pré-requisitos do ambiente AWS
 
