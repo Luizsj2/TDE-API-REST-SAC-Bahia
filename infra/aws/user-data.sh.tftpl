@@ -1,0 +1,21 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+dnf install -y docker jq
+systemctl enable --now docker
+install -d -m 0700 /etc/sac
+curl --fail --silent --show-error --retry 3 \
+  https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o /etc/sac/rds-ca.pem
+aws secretsmanager get-secret-value --region '${region}' --secret-id '${secret_arn}' \
+  --query SecretString --output text > /etc/sac/secret.json
+jq -er '.api_key | strings | select(length > 0)' /etc/sac/secret.json > /etc/sac/api-key
+jq -er '.password | strings | select(length > 0)' /etc/sac/secret.json > /etc/sac/postgres-password
+rm /etc/sac/secret.json
+aws ecr get-login-password --region '${region}' | docker login --username AWS --password-stdin '${registry}'
+docker pull '${image}'
+docker logout '${registry}'
+docker run -d --name sac-api --restart unless-stopped -p 3000:3000 \
+  --mount type=bind,src=/etc/sac,dst=/run/sac,readonly \
+  -e API_KEY_FILE=/run/sac/api-key -e PGPASSWORD_FILE=/run/sac/postgres-password \
+  -e PGSSLROOTCERT=/run/sac/rds-ca.pem -e PGHOST='${db_host}' -e PGDATABASE=sac -e PGUSER=sac_app \
+  --log-driver awslogs --log-opt awslogs-region='${region}' --log-opt awslogs-group='${log_group}' '${image}'

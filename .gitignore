@@ -1,2 +1,11 @@
 node_modules/
 cliente_python/venv/
+__pycache__/
+.secrets/
+.env
+.terraform/
+.terraform-tools/
+*.tfstate*
+*.tfplan
+tfplan
+crash.log

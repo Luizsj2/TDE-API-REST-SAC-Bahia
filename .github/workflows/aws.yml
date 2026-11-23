@@ -1,0 +1,89 @@
+name: Reconciliar infraestrutura AWS
+
+on:
+  workflow_dispatch:
+    inputs:
+      aplicar:
+        description: Aplicar o plano aprovado no ambiente AWS
+        type: boolean
+        default: false
+  schedule:
+    - cron: '17 10 * * 1'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency: sac-aws
+
+jobs:
+  reconciliar:
+    if: vars.TF_AWS_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    environment: aws
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'sa-east-1' }}
+      TF_VAR_region: ${{ vars.AWS_REGION || 'sa-east-1' }}
+      TF_VAR_hostname: ${{ vars.SAC_HOSTNAME }}
+      TF_VAR_zone_id: ${{ vars.SAC_ZONE_ID }}
+      TF_VAR_certificate_arn: ${{ vars.SAC_CERTIFICATE_ARN }}
+      TF_VAR_ingress_cidr: ${{ vars.SAC_INGRESS_CIDR }}
+      TF_VAR_ami_id: ${{ vars.SAC_AMI_ID }}
+      TF_VAR_repository_url: ${{ vars.SAC_ECR_REPOSITORY_URL }}
+      TF_VAR_app_secret_arn: ${{ vars.SAC_APP_SECRET_ARN }}
+      TF_BUCKET: ${{ vars.TF_BUCKET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.12.2
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TF_AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Identificar versão da aplicação
+        env:
+          IMAGE_HASH: ${{ hashFiles('Servidor_node/*') }}
+        run: echo "TF_VAR_image_tag=$IMAGE_HASH" >> "$GITHUB_ENV"
+      - name: Publicar imagem imutável
+        if: github.event_name == 'workflow_dispatch' && inputs.aplicar
+        run: |
+          registry="${TF_VAR_repository_url%%/*}"
+          repository="${TF_VAR_repository_url#*/}"
+          if aws ecr describe-images --repository-name "$repository" --image-ids "imageTag=$TF_VAR_image_tag" >/dev/null 2>&1; then
+            exit 0
+          fi
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
+          image="$TF_VAR_repository_url:$TF_VAR_image_tag"
+          docker build -t "$image" Servidor_node
+          docker push "$image"
+      - name: Inicializar e planejar
+        id: plan
+        working-directory: infra/aws
+        run: |
+          terraform init -input=false -backend-config="bucket=$TF_BUCKET" -backend-config="key=sac/terraform.tfstate" -backend-config="region=$AWS_REGION"
+          status=0
+          terraform plan -input=false -detailed-exitcode -out="$RUNNER_TEMP/sac.tfplan" || status=$?
+          case "$status" in
+            0|2) echo "status=$status" >> "$GITHUB_OUTPUT" ;;
+            *) exit "$status" ;;
+          esac
+      - name: Aplicar configuração do commit
+        if: github.event_name == 'workflow_dispatch' && inputs.aplicar && steps.plan.outputs.status == '2'
+        working-directory: infra/aws
+        run: terraform apply -input=false "$RUNNER_TEMP/sac.tfplan"
+      - name: Verificar saúde do ALB
+        if: github.event_name == 'workflow_dispatch' && inputs.aplicar
+        working-directory: infra/aws
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS --max-time 10 "$(terraform output -raw url)/health" && exit 0
+            sleep 10
+          done
+          exit 1
+      - name: Sinalizar divergência
+        if: github.event_name == 'schedule' && steps.plan.outputs.status == '2'
+        run: |
+          echo "::error::O plano detectou diferenças em relação à configuração versionada."
+          exit 1

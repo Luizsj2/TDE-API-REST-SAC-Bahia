@@ -1,0 +1,91 @@
+{
+  "executado_em_utc": "2026-11-23T22:50:05.672Z",
+  "ambiente": "Docker Compose/PostgreSQL",
+  "rajada_antes": {
+    "total": 75,
+    "p50_ms": 167.9,
+    "p95_ms": 194.6,
+    "taxa_falhas_pct": 0,
+    "nos": {
+      "api-b": 37,
+      "api-a": 38
+    },
+    "codigos": {
+      "200": 75
+    }
+  },
+  "falha_transicao": {
+    "total": 12,
+    "p50_ms": 5.6,
+    "p95_ms": 6.3,
+    "taxa_falhas_pct": 8.3,
+    "nos": {
+      "api-a": 11
+    },
+    "codigos": {
+      "200": 11,
+      "503": 1
+    }
+  },
+  "rajada_com_no_fora": {
+    "total": 75,
+    "p50_ms": 123.6,
+    "p95_ms": 163.8,
+    "taxa_falhas_pct": 0,
+    "nos": {
+      "api-a": 75
+    },
+    "codigos": {
+      "200": 75
+    }
+  },
+  "tempo_deteccao_ms": 1652,
+  "deteccao_registrada": {
+    "timestamp": "2026-11-23T22:50:01.151Z",
+    "nivel": "warn",
+    "evento": "saude_alvo",
+    "no": "balanceador",
+    "alvo": "api-b:3000",
+    "saudavel": false
+  },
+  "tempo_reintegracao_ms": 2509,
+  "integridade": {
+    "total": 75,
+    "p50_ms": 91.6,
+    "p95_ms": 132.7,
+    "taxa_falhas_pct": 0,
+    "nos": {
+      "api-b": 38,
+      "api-a": 37
+    },
+    "codigos": {
+      "200": 74,
+      "201": 1
+    },
+    "registros_no_banco": 1
+  },
+  "rastreamento": [
+    {
+      "timestamp": "2026-11-23T22:49:58.619Z",
+      "nivel": "warn",
+      "evento": "http",
+      "no": "balanceador",
+      "correlation_id": "bancada-e7c5589d-bb04-471a-bf44-3916fcb28f63",
+      "metodo": "GET",
+      "status": 404,
+      "alvo": "api-b:3000",
+      "duracao_ms": 4
+    },
+    {
+      "timestamp": "2026-11-23T22:49:58.618Z",
+      "nivel": "warn",
+      "evento": "http",
+      "no": "api-b",
+      "correlation_id": "bancada-e7c5589d-bb04-471a-bf44-3916fcb28f63",
+      "metodo": "GET",
+      "rota": "/postos/:id_posto/fila",
+      "status": 404,
+      "duracao_ms": 3
+    }
+  ]
+}

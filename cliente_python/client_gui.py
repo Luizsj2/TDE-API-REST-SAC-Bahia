@@ -1,59 +1,76 @@
 import tkinter as tk
-import requests
-import time
+from tkinter import ttk
+from concurrent.futures import ThreadPoolExecutor
 
-def consultar_fila():
-    id_posto = entry_posto.get().strip().lower()
-    if not id_posto:
-        label_resultado.config(text="Informe o nome do posto.", fg="orange")
-        return
+from client import fila, recomendar
 
-    portas = [3000, 3001]
-    headers = {'x-api-key': '32452555'}
-    
-    label_resultado.config(text="Consultando API...", fg="blue")
-    janela.update()
 
-    for porta in portas:
-        url = f"http://api.sacbahia.local:{porta}/postos/{id_posto}/fila"
-        
+def main():
+    janela = tk.Tk()
+    janela.title("SAC Bahia")
+    janela.minsize(470, 260)
+    painel = ttk.Frame(janela, padding=18)
+    painel.pack(fill="both", expand=True)
+    painel.columnconfigure(1, weight=1)
+    resultado = tk.StringVar()
+    executor = ThreadPoolExecutor(max_workers=1)
+
+    def campo(rotulo, linha, valor):
+        ttk.Label(painel, text=rotulo).grid(row=linha, column=0, sticky="w", padx=(0, 12), pady=4)
+        entrada = ttk.Entry(painel)
+        entrada.grid(row=linha, column=1, sticky="ew", pady=4)
+        entrada.insert(0, valor)
+        return entrada
+
+    posto = campo("ID do posto", 0, "feira")
+    latitude = campo("Latitude", 2, "-12.9790")
+    longitude = campo("Longitude", 3, "-38.4520")
+
+    def executar(acao, formatar, *args):
+        resultado.set("Consultando…")
+        consulta.state(["disabled"])
+        rota.state(["disabled"])
+        futuro = executor.submit(acao, *args)
+
+        def atualizar():
+            if not futuro.done():
+                janela.after(100, atualizar)
+                return
+            try:
+                resultado.set(formatar(futuro.result()))
+            except (ValueError, RuntimeError) as erro:
+                resultado.set(str(erro))
+            consulta.state(["!disabled"])
+            rota.state(["!disabled"])
+
+        atualizar()
+
+    def mostrar_fila(dados):
+        return f"{dados['posto']}\nEspera estimada de {dados['tempo_espera_minutos']} min."
+
+    def mostrar_rota(dados):
+        sac = dados["recomendado"]
+        return (f"{sac['posto']}\nViagem de {sac['viagem_minutos']} min · "
+                f"Fila de {sac['tempo_espera_minutos']} min · Total de {sac['total_minutos']} min\n"
+                f"Rota demonstrativa de {sac['distancia_km']} km.")
+
+    def solicitar_rota():
         try:
-            response = requests.get(url, headers=headers)
-            if response.status_code == 200:
-                dados = response.json()
-                label_resultado.config(
-                    text=f"Status 200 (Porta {porta})\n\nPosto: {dados['posto']}\nEspera: {dados['tempo_espera_minutos']} min", 
-                    fg="green"
-                )
-                return
-            elif response.status_code == 404:
-                label_resultado.config(text="Erro 404: Posto não localizado.", fg="red")
-                return
-            elif response.status_code == 401:
-                label_resultado.config(text="Erro 401: Falha de autenticação.", fg="red")
-                return
-        except requests.exceptions.ConnectionError:
-            # Failover caso a porta recuse conexao
-            label_resultado.config(text=f"Timeout na porta {porta}. Tentando rota alternativa...", fg="orange")
-            janela.update()
-            time.sleep(1.5)
+            origem = (float(latitude.get().replace(",", ".")), float(longitude.get().replace(",", ".")))
+        except ValueError:
+            resultado.set("Informe latitude e longitude válidas.")
+            return
+        executar(recomendar, mostrar_rota, *origem)
 
-    label_resultado.config(text="Erro Crítico: Nenhum servidor disponível.", fg="red")
+    consulta = ttk.Button(painel, text="Consultar fila", command=lambda: executar(fila, mostrar_fila, posto.get().strip()))
+    consulta.grid(row=1, column=1, sticky="w", pady=(0, 12))
+    rota = ttk.Button(painel, text="Recomendar posto", command=solicitar_rota)
+    rota.grid(row=4, column=1, sticky="w")
+    ttk.Label(painel, textvariable=resultado, wraplength=430).grid(row=5, column=0, columnspan=2, sticky="w", pady=14)
 
-# init ui
-janela = tk.Tk()
-janela.title("SAC Bahia - Fila")
-janela.geometry("350x250")
+    janela.protocol("WM_DELETE_WINDOW", lambda: (executor.shutdown(wait=False, cancel_futures=True), janela.destroy()))
+    janela.mainloop()
 
-tk.Label(janela, text="Monitoramento SAC Bahia", font=("Arial", 12, "bold")).pack(pady=10)
-tk.Label(janela, text="Postos disponíveis: feira, salvador, shopping_bahia").pack()
 
-entry_posto = tk.Entry(janela, width=25, font=("Arial", 10))
-entry_posto.pack(pady=5)
-
-tk.Button(janela, text="Consultar", command=consultar_fila, bg="#eee").pack(pady=10)
-
-label_resultado = tk.Label(janela, text="", font=("Arial", 10))
-label_resultado.pack(pady=5)
-
-janela.mainloop()
+if __name__ == "__main__":
+    main()

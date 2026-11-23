@@ -1,0 +1,66 @@
+name: sac-tde
+x-api: &api
+  build: ./Servidor_node
+  environment:
+    API_KEY_FILE: /run/secrets/api_key
+    PGPASSWORD_FILE: /run/secrets/postgres_password
+    PGHOST: banco
+    PGUSER: sac
+    PGDATABASE: sac
+    EXPOR_NO: "1"
+  secrets:
+    - api_key
+    - postgres_password
+  depends_on:
+    banco:
+      condition: service_healthy
+  networks: [servicos]
+
+services:
+  api-a:
+    <<: *api
+    hostname: api-a
+  api-b:
+    <<: *api
+    hostname: api-b
+  banco:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: sac
+      POSTGRES_DB: sac
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+    volumes:
+      - dados-sace:/var/lib/postgresql/data
+      - ./infra/db/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks: [servicos]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -h 127.0.0.1 -U sac -d sac"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+  balanceador:
+    image: node:22-bookworm-slim
+    command: [node, /opt/balanceador.js]
+    environment:
+      TARGETS: http://api-a:3000,http://api-b:3000
+    volumes:
+      - ./infra/local/balanceador.js:/opt/balanceador.js:ro
+    ports:
+      - "127.0.0.1:${SAC_PORT:-18080}:8080"
+    networks: [entrada, servicos]
+    depends_on: [api-a, api-b]
+
+networks:
+  entrada: {}
+  servicos:
+    internal: true
+
+volumes:
+  dados-sace: {}
+
+secrets:
+  api_key:
+    file: ./.secrets/api-key
+  postgres_password:
+    file: ./.secrets/postgres-password

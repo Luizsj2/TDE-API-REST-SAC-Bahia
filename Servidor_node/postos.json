@@ -1,0 +1,23 @@
+[
+  {
+    "id": "feira",
+    "posto": "SAC Feira de Santana",
+    "latitude": -12.2563,
+    "longitude": -38.9586,
+    "tempo_espera_minutos": 45
+  },
+  {
+    "id": "shopping_bahia",
+    "posto": "SAC Shopping da Bahia",
+    "latitude": -12.9786,
+    "longitude": -38.4512,
+    "tempo_espera_minutos": 120
+  },
+  {
+    "id": "salvador",
+    "posto": "SAC Salvador",
+    "latitude": -12.9769,
+    "longitude": -38.4553,
+    "tempo_espera_minutos": 30
+  }
+]
