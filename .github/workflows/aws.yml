@@ -44,7 +44,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - name: Identificar versão da aplicação
         env:
-          IMAGE_HASH: ${{ hashFiles('Servidor_node/*') }}
+          IMAGE_HASH: ${{ hashFiles('Servidor_node/**') }}
         run: echo "TF_VAR_image_tag=$IMAGE_HASH" >> "$GITHUB_ENV"
       - name: Publicar imagem imutável
         if: github.event_name == 'workflow_dispatch' && inputs.aplicar

@@ -14,6 +14,7 @@ const logs = [];
 const processes = [];
 const ids = { b: 'api-b', proxy: 'balanceador' };
 const unique = randomUUID();
+const inicioDaBancada = new Date().toISOString();
 const key = compose
     ? readFileSync(new URL('.secrets/api-key', cwd), 'utf8').trim()
     : process.env.API_KEY || randomUUID();
@@ -131,6 +132,32 @@ try {
         return pair.every(x => x.status === 200) && new Set(pair.map(x => x.node)).size === 2;
     }, 'duas réplicas e dados disponíveis');
 
+    if (compose) {
+        const pagina = await fetch(base, { signal: AbortSignal.timeout(4500) });
+        assert.equal(pagina.status, 200);
+        const html = await pagina.text();
+        assert.match(html, /Planeje sua ida ao SAC/);
+        const asset = html.match(/src="([^"]+\.js)"/)?.[1];
+        assert.ok(asset, 'A página deve carregar o JavaScript compilado pelo Vite.');
+        const bundle = await fetch(new URL(asset, base), { signal: AbortSignal.timeout(4500) });
+        assert.equal(bundle.status, 200);
+        assert.match(bundle.headers.get('content-type'), /javascript/);
+        await bundle.arrayBuffer();
+
+        const catalogo = await apiRequest('/web-api/postos', { headers: { 'x-api-key': '' } });
+        assert.equal(catalogo.status, 200);
+        assert.ok(catalogo.body.some(posto => posto.id === 'feira' && Number.isInteger(posto.tempo_espera_minutos)));
+        const recomendacaoWeb = await apiRequest('/web-api/recomendacoes', {
+            method: 'POST', headers: { 'x-api-key': '' }, body: JSON.stringify(origem),
+        });
+        assert.equal(recomendacaoWeb.status, 200);
+        assert.equal(recomendacaoWeb.body.recomendado.id, 'salvador');
+        const chegadaSemChave = await apiRequest('/postos/salvador/chegadas', {
+            method: 'POST', headers: { 'x-api-key': '' }, body: JSON.stringify(origem),
+        });
+        assert.equal(chegadaSemChave.status, 401);
+    }
+
     const [salvador, feira, invalida, semChave, fora] = await Promise.all([
         recomendar(), recomendar({ latitude: -12.257, longitude: -38.958 }),
         recomendar({ latitude: 400, longitude: 0 }),
@@ -202,7 +229,7 @@ try {
 
     if (compose) {
         for (const service of ['balanceador', 'api-a', 'api-b']) {
-            for (const line of docker('logs', '--no-color', '--no-log-prefix', service).split('\n')) {
+            for (const line of docker('logs', '--no-color', '--no-log-prefix', '--since', inicioDaBancada, service).split('\n')) {
                 try { logs.push(JSON.parse(line)); } catch { /* Docker status output */ }
             }
         }

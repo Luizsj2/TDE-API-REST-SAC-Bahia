@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Consulte filas e planeje sua ida a um posto do SAC Bahia.">
+    <title>SAC Bahia | Consulta de postos</title>
+</head>
+<body>
+    <header class="topbar">
+        <div class="frame topbar-inner">
+            <a class="brand" href="./">
+                <span class="brand-mark" aria-hidden="true">SAC</span>
+                <span>SAC Bahia</span>
+            </a>
+            <span id="service-status" class="service loading" role="status">Conectando à API</span>
+        </div>
+    </header>
+
+    <main class="frame">
+        <section class="intro" aria-labelledby="title">
+            <h1 id="title">Planeje sua ida ao SAC</h1>
+            <p>Combine o tempo de deslocamento com a espera para encontrar o posto mais rápido para você.</p>
+        </section>
+
+        <div id="catalog-error" class="notice" hidden>
+            <p id="catalog-message" role="alert"></p>
+            <button id="retry" class="secondary" type="button">Tentar novamente</button>
+        </div>
+
+        <div class="layout">
+            <section class="card controls" aria-labelledby="origin-title">
+                <div class="section-heading">
+                    <h2 id="origin-title">Informe sua origem</h2>
+                    <p>Digite as coordenadas ou use um posto como referência.</p>
+                </div>
+
+                <form id="route-form">
+                    <label for="reference">Posto de referência</label>
+                    <select id="reference" disabled>
+                        <option value="">Carregando postos…</option>
+                    </select>
+                    <div class="coordinates">
+                        <div>
+                            <label for="latitude">Latitude</label>
+                            <input id="latitude" name="latitude" type="text" inputmode="decimal" placeholder="-12,979" required>
+                        </div>
+                        <div>
+                            <label for="longitude">Longitude</label>
+                            <input id="longitude" name="longitude" type="text" inputmode="decimal" placeholder="-38,452" required>
+                        </div>
+                    </div>
+                    <button id="recommend" class="primary" type="submit" disabled>Recomendar posto <span aria-hidden="true">→</span></button>
+                    <p id="route-status" class="form-message" role="status" hidden></p>
+                </form>
+
+                <section class="queues" aria-labelledby="queue-title">
+                    <div class="queue-heading">
+                        <h2 id="queue-title">Filas por posto</h2>
+                        <button id="refresh" class="text-button" type="button" disabled>Atualizar</button>
+                    </div>
+                    <ul id="queue-list" class="queue-list"></ul>
+                </section>
+            </section>
+
+            <section class="card result" aria-labelledby="result-title">
+                <div class="section-heading result-heading">
+                    <h2 id="result-title">Sua rota recomendada</h2>
+                    <p id="route-intro">O trajeto aparece aqui após calcular a recomendação.</p>
+                </div>
+                <div id="route-map" class="map-wrap">
+                    <canvas id="map" role="img" aria-label="Trajeto simplificado entre a origem e o posto recomendado"></canvas>
+                    <div class="map-legend" id="map-legend" hidden>
+                        <span><i class="point origin"></i> Origem</span>
+                        <span><i class="point destination"></i> Posto recomendado</span>
+                    </div>
+                </div>
+                <div id="result-details" hidden>
+                    <div class="recommendation">
+                        <div>
+                            <p class="label">Posto recomendado</p>
+                            <h3 id="best-name"></h3>
+                        </div>
+                        <div class="total">
+                            <strong id="best-total"></strong>
+                            <span>tempo total</span>
+                        </div>
+                    </div>
+                    <dl class="metrics">
+                        <div><dt>Deslocamento</dt><dd id="best-travel"></dd></div>
+                        <div><dt>Espera na fila</dt><dd id="best-wait"></dd></div>
+                        <div><dt>Distância</dt><dd id="best-distance"></dd></div>
+                    </dl>
+                    <section id="alternatives" class="alternatives" aria-labelledby="alternatives-title" hidden>
+                        <h3 id="alternatives-title">Outras opções</h3>
+                        <ul id="alternative-list" class="queue-list"></ul>
+                    </section>
+                </div>
+            </section>
+        </div>
+        <footer>Protótipo acadêmico · Tempos de espera simulados e trajetos demonstrativos.</footer>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

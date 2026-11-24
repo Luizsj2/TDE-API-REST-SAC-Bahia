@@ -5,24 +5,38 @@ Prof. Rafael Levi Batista Costa · Equipe 6 · OpenAPI/Swagger SAC
 
 ## Equipe e responsabilidades
 
-- **Luiz Henrique Santos de Jesus:** interface Tkinter, infraestrutura, DNS e DevOps.
+- **Luiz Henrique Santos de Jesus:** interface web, infraestrutura, DNS e DevOps.
 - **Diego Araujo Silva:** API Node.js, estrutura de dados e segurança.
 - **Thiago Gomes de Oliveira:** arquitetura distribuída e tolerância a falhas.
 
-A API Node.js preserva a consulta de fila da Parte 1. Na Parte 2, o cliente Python informa a origem, a API recomenda um posto e devolve uma rota em GeoJSON. O protótipo também registra chegadas com uma chave de idempotência. Os dois processos da API usam a mesma base PostgreSQL.
+A interface em JavaScript com Vite consulta o catálogo e os tempos de fila no PostgreSQL pela API Node.js. O visitante informa a origem, recebe a recomendação e vê o trajeto em GeoJSON na tela. O cliente Python de terminal continua disponível, inclusive para o registro de chegadas com chave de idempotência. Os dois processos da API usam a mesma base PostgreSQL.
 
 ## Executar a bancada
 
-Requisitos: Docker Desktop ou Docker Engine com Compose v2, Node.js 22 e Python 3. O cliente gráfico também usa Tkinter. Na primeira execução, o Docker baixa as imagens. Use `SAC_PORT` se a porta local 18080 estiver ocupada.
+Requisitos para a interface web: Docker Desktop ou Docker Engine com Compose v2 e Node.js 22.12 ou superior. Na primeira execução, o Docker baixa as imagens. Use `SAC_PORT` se a porta local 18080 estiver ocupada.
 
 ```sh
 node scripts/iniciar-local.mjs
 docker compose ps
+```
+
+Abra [SAC Bahia](http://127.0.0.1:18080/). As imagens da API incluem o frontend já compilado. A interface pública usa apenas o catálogo e a recomendação. A chave de API fica fora do JavaScript entregue ao navegador.
+
+Para desenvolver a interface com recarga automática, mantenha o Compose ativo e execute os comandos abaixo. O Vite encaminha `/web-api` para o balanceador local.
+
+```sh
+cd Servidor_node/frontend
+npm ci
+npm run dev
+```
+
+Com Python 3 instalado, também é possível testar os endpoints autenticados por terminal.
+
+```sh
 python cliente_python/client.py fila feira
 python cliente_python/client.py recomendar -12.979 -38.452
 python cliente_python/client.py recomendar -12.257 -38.958
 python cliente_python/client.py chegada salvador -12.9769 -38.4553 exemplo-chegada-01
-python cliente_python/client_gui.py
 ```
 
 No Windows, use `py -3` se o comando `python` não estiver disponível. O script preserva as chaves que já existirem em `.secrets/`. O cliente lê a chave por arquivo e usa `http://127.0.0.1:18080` por padrão. Use `SAC_API_URL` se mudar a porta ou o ambiente. `API_KEY_FILE` e `API_KEY` permitem usar outra chave. A porta é publicada apenas no loopback. O balanceador alcança as duas réplicas por DNS do Docker e o banco só aparece na rede interna.
@@ -35,7 +49,7 @@ No Windows, use `py -3` se o comando `python` não estiver disponível. O script
 
 ```mermaid
 flowchart TD
-    Cliente([Cliente Python ou Tkinter]) --> Entrada["Requisição HTTP ao balanceador na porta 18080"]
+    Cliente([Navegador ou cliente Python]) --> Entrada["Requisição HTTP ao balanceador na porta 18080"]
     Entrada --> Correlacao["Preserva ou gera o Correlation ID"]
     Correlacao --> Alvos{"Há réplicas saudáveis?"}
     Sondas["Sondas GET /health nas duas réplicas"] -.-> Estado["Atualiza a lista de alvos a cada verificação"]
@@ -47,7 +61,9 @@ flowchart TD
     Rodizio --> API
     API --> Saude{"É GET /health?"}
     Saude -->|Sim| Saudavel["HTTP 200: processo ativo"]
-    Saude -->|Não| Chave{"X-API-Key válida?"}
+    Saude -->|Não| Publica{"É uma consulta web pública?"}
+    Publica -->|Sim| Operacao
+    Publica -->|Não| Chave{"X-API-Key válida?"}
     Chave -->|Não| Negado["HTTP 401"]
     Chave -->|Sim| Operacao([Processa a operação])
 ```
@@ -93,7 +109,7 @@ A rota autenticada `GET /ready` testa o acesso ao catálogo e retorna HTTP 200 s
 
 ## Contrato e cálculo de rota
 
-O [OpenAPI](openapi.yaml) documenta os caminhos, entradas e respostas. Envie `X-API-Key` em todas as rotas autenticadas.
+O [OpenAPI](openapi.yaml) documenta os caminhos, entradas e respostas. A interface usa `GET /web-api/postos` e `POST /web-api/recomendacoes`. Envie `X-API-Key` nas rotas autenticadas da API, incluindo o registro de chegada.
 
 | Método e caminho | Resultado |
 | --- | --- |
@@ -128,7 +144,7 @@ Com o Compose em execução e as duas réplicas saudáveis, rode `node scripts/f
 
 ### Roteiro de arguição
 
-1. **Luiz** abre o cliente Python e compara as recomendações para Salvador e Feira de Santana. Mostra o endereço único e explica o DNS do Docker e o equivalente no Route 53.
+1. **Luiz** abre a interface web e compara as recomendações para Salvador e Feira de Santana. Mostra o endereço único e explica o DNS do Docker e o equivalente no Route 53.
 2. **Diego** apresenta o contrato OpenAPI, o ranking de viagem mais espera e a chave de idempotência. Na rajada de chegadas, aponta o HTTP 201 da primeira inserção e prova que as demais respostas reutilizam o mesmo registro no PostgreSQL.
 3. **Thiago** mostra o fluxograma de tolerância a falhas, interrompe uma réplica pela bancada e acompanha a recuperação pelo mesmo endereço. Mostra o HTTP 404 com o mesmo `Correlation ID` no balanceador e na API e explica a separação entre o ensaio local e a arquitetura AWS.
 

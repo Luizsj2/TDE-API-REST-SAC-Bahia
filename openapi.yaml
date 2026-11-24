@@ -8,6 +8,38 @@ servers:
 security:
   - ApiKey: []
 paths:
+  /web-api/postos:
+    get:
+      summary: Lista os postos e a espera exibidos pela interface web
+      security: []
+      responses:
+        '200':
+          description: Catálogo de postos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Posto'
+        '503':
+          $ref: '#/components/responses/Erro'
+  /web-api/recomendacoes:
+    post:
+      summary: Calcula a recomendação para a interface web
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/Origem'
+      responses:
+        '200':
+          $ref: '#/paths/~1recomendacoes/post/responses/200'
+        '400':
+          $ref: '#/components/responses/Erro'
+        '413':
+          $ref: '#/components/responses/Erro'
+        '422':
+          $ref: '#/components/responses/Erro'
+        '503':
+          $ref: '#/components/responses/Erro'
   /health:
     get:
       summary: Verifica se o processo HTTP responde
@@ -186,15 +218,21 @@ components:
         latitude: { type: number, format: double, minimum: -90, maximum: 90 }
         longitude: { type: number, format: double, minimum: -180, maximum: 180 }
       example: { latitude: -12.979, longitude: -38.452 }
-    Candidato:
+    Posto:
       allOf:
         - $ref: '#/components/schemas/Coordenadas'
         - type: object
-          required: [id, posto, tempo_espera_minutos, viagem_minutos, total_minutos, distancia_km]
+          required: [id, posto, tempo_espera_minutos]
           properties:
             id: { type: string }
             posto: { type: string }
             tempo_espera_minutos: { type: integer, minimum: 0 }
+    Candidato:
+      allOf:
+        - $ref: '#/components/schemas/Posto'
+        - type: object
+          required: [viagem_minutos, total_minutos, distancia_km]
+          properties:
             viagem_minutos: { type: integer, minimum: 0 }
             total_minutos: { type: integer, minimum: 0 }
             distancia_km: { type: number, minimum: 0 }
